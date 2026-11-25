@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Crowd Detection — Live Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --ink:#11151c;
+  --slate:#5b6472;
+  --slate-soft:#9aa3b1;
+  --mist:#f4f6f9;
+  --paper:#ffffff;
+  --hairline:#e3e7ed;
+  --hairline-strong:#d3d9e1;
+
+  --brand:#3a4bff;       /* object detection / primary */
+  --brand-soft:#edf0ff;
+  --brand-border:#c9cfff;
+  --ok:#1f9d55;          /* person detection / clear */
+  --ok-soft:#eafaf0;
+  --ok-border:#bce8cc;
+  --danger:#e0312b;      /* crowd alert */
+  --danger-soft:#fdecea;
+  --danger-border:#f6c5c1;
+  --violet:#7c5cfc;      /* camera / utility */
+  --violet-soft:#f1edff;
+  --amber:#d97706;
+
+  --r-sm:8px; --r-md:12px; --r-lg:16px;
+  --font-display:'Space Grotesk',system-ui,sans-serif;
+  --font-body:'Inter',system-ui,-apple-system,sans-serif;
+  --font-mono:'JetBrains Mono',ui-monospace,SFMono-Regular,monospace;
+  --scan-color:#3a4bff;
+}
+
+body{font-family:var(--font-body);background:var(--mist);color:var(--ink);min-height:100vh;font-size:14px;-webkit-font-smoothing:antialiased}
+button{font-family:inherit;color:inherit}
+
+/* NAV */
+.nav{height:60px;background:var(--paper);border-bottom:1px solid var(--hairline);display:flex;align-items:center;justify-content:space-between;padding:0 26px;position:sticky;top:0;z-index:60}
+.nav-logo{display:flex;align-items:center;gap:11px}
+.logo-box{width:34px;height:34px;background:linear-gradient(135deg,var(--brand),var(--violet));border-radius:9px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:13px;font-family:var(--font-display);letter-spacing:.02em}
+.nav-name{font-family:var(--font-display);font-weight:600;font-size:15px;color:var(--ink);letter-spacing:-.01em}
+.nav-sub{font-size:11px;color:var(--slate-soft);margin-top:1px}
+.nav-right{display:flex;align-items:center;gap:12px}
+.clock{font-family:var(--font-mono);font-size:13px;font-weight:500;color:var(--slate);background:var(--mist);padding:5px 11px;border-radius:7px;letter-spacing:.02em}
+.badge{display:flex;align-items:center;gap:6px;padding:5px 13px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.04em;border:1.5px solid var(--hairline);color:var(--slate-soft)}
+.badge.live{border-color:var(--ok);color:var(--ok);background:var(--ok-soft)}
+.badge-dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+.badge.live .badge-dot{animation:blink 1.2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.25}}
+
+/* LAYOUT */
+.layout{display:grid;grid-template-columns:272px 1fr 252px;height:calc(100vh - 60px);overflow:hidden}
+
+/* SIDEBAR */
+.sidebar{background:var(--paper);border-right:1px solid var(--hairline);padding:22px 16px;overflow-y:auto;display:flex;flex-direction:column;gap:24px}
+.sec-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--slate-soft);margin-bottom:9px}
+
+/* DROPDOWN */
+.dropdown{position:relative;margin-bottom:8px}
+.dropdown-trigger{width:100%;display:flex;align-items:center;gap:10px;padding:10px 11px;border:1.5px solid var(--hairline);border-radius:var(--r-md);background:var(--paper);cursor:pointer;text-align:left;transition:border-color .15s,box-shadow .15s}
+.dropdown-trigger:hover{border-color:var(--hairline-strong)}
+.dropdown-trigger:focus-visible{outline:2px solid var(--brand);outline-offset:1px}
+.dropdown.open .dropdown-trigger{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+.dd-icon-box{width:32px;height:32px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:var(--mist);color:var(--slate)}
+.dd-icon-box.tone-blue{background:var(--brand-soft);color:var(--brand)}
+.dd-icon-box.tone-green{background:var(--ok-soft);color:var(--ok)}
+.dd-icon-box.tone-red{background:var(--danger-soft);color:var(--danger)}
+.dd-icon-box.tone-violet{background:var(--violet-soft);color:var(--violet)}
+.dd-trigger-text{flex:1;min-width:0}
+.dd-trigger-label{display:block;font-size:13px;font-weight:600;color:var(--ink)}
+.dd-trigger-sub{display:block;font-size:11px;color:var(--slate);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dd-chevron{color:var(--slate-soft);transition:transform .15s;flex-shrink:0;display:flex}
+.dropdown.open .dd-chevron{transform:rotate(180deg)}
+
+.dropdown-panel{position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--paper);border:1.5px solid var(--hairline);border-radius:var(--r-md);box-shadow:0 14px 32px rgba(17,21,28,.12);padding:6px;z-index:40;opacity:0;visibility:hidden;transform:translateY(-4px);transition:opacity .15s,transform .15s,visibility .15s}
+.dropdown.open .dropdown-panel{opacity:1;visibility:visible;transform:translateY(0)}
+.dd-option{width:100%;display:flex;align-items:flex-start;gap:10px;padding:8px 9px;border:none;border-radius:9px;background:transparent;cursor:pointer;text-align:left;margin-bottom:2px}
+.dd-option:last-child{margin-bottom:0}
+.dd-option:hover{background:var(--mist)}
+.dd-option.active{background:var(--mist)}
+.dd-option .dd-icon-box{width:28px;height:28px;margin-top:1px}
+.dd-opt-text{flex:1;min-width:0}
+.dd-opt-n{display:block;font-size:12.5px;font-weight:600;color:var(--ink)}
+.dd-opt-d{display:block;font-size:11px;color:var(--slate);margin-top:1px;line-height:1.4}
+.dd-check{margin-left:auto;color:var(--brand);opacity:0;flex-shrink:0;margin-top:3px;display:flex}
+.dd-option.active .dd-check{opacity:1}
+
+/* BUTTONS */
+.btn{width:100%;padding:11px;border:none;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:8px}
+.btn svg{flex-shrink:0}
+.btn:disabled{opacity:.42;cursor:not-allowed}
+.btn:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+.btn-start{background:var(--brand);color:#fff;box-shadow:0 4px 14px rgba(58,75,255,.28)}
+.btn-start:not(:disabled):hover{background:#2c3ce8;transform:translateY(-1px)}
+.btn-shot{background:var(--mist);color:var(--ink);border:1.5px solid var(--hairline)}
+.btn-shot:not(:disabled):hover{background:#eceef3}
+.btn-stop{background:var(--danger-soft);color:var(--danger);border:1.5px solid var(--danger-border)}
+.btn-stop:not(:disabled):hover{background:var(--danger);color:#fff;border-color:var(--danger)}
+
+/* FEED */
+.feed-area{background-color:#0b0d10;position:relative;overflow:hidden;display:flex;align-items:center;justify-content:center;
+  background-image:linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px);
+  background-size:34px 34px}
+.feed-area img{width:100%;height:100%;object-fit:contain;display:none;position:relative;z-index:1}
+.feed-placeholder{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:rgba(255,255,255,.32);z-index:1}
+.feed-placeholder svg{opacity:.5}
+.feed-placeholder .tip{font-size:13px;font-weight:500;color:rgba(255,255,255,.55)}
+.feed-placeholder .tip2{font-size:11.5px;color:rgba(255,255,255,.3)}
+.corner{position:absolute;width:20px;height:20px;opacity:.35;z-index:2}
+.tl{top:12px;left:12px;border-top:2px solid #fff;border-left:2px solid #fff}
+.tr{top:12px;right:12px;border-top:2px solid #fff;border-right:2px solid #fff}
+.bl{bottom:12px;left:12px;border-bottom:2px solid #fff;border-left:2px solid #fff}
+.br{bottom:12px;right:12px;border-bottom:2px solid #fff;border-right:2px solid #fff}
+.alert-ring{position:absolute;inset:0;border:3px solid var(--danger);opacity:0;pointer-events:none;transition:opacity .2s;z-index:2}
+.alert-ring.on{opacity:1;animation:ring .7s infinite}
+@keyframes ring{0%,100%{opacity:1}50%{opacity:.15}}
+.scan-line{position:absolute;left:0;right:0;top:0;height:2px;z-index:2;opacity:0;pointer-events:none;
+  background:linear-gradient(90deg,transparent,var(--scan-color) 50%,transparent)}
+.scan-line.on{animation:scan 3.2s linear infinite}
+@keyframes scan{0%{top:0;opacity:0}8%{opacity:.85}50%{opacity:.85}92%{opacity:0}100%{top:100%;opacity:0}}
+.feed-bar{position:absolute;bottom:0;left:0;right:0;padding:9px 14px;background:linear-gradient(transparent,rgba(0,0,0,.6));display:none;justify-content:space-between;align-items:center;z-index:3}
+.feed-bar.show{display:flex}
+.feed-fps{font-family:var(--font-mono);font-size:12px;font-weight:600}
+.fps-good{color:#4ade80} .fps-ok{color:#fbbf24} .fps-low{color:#f87171}
+.feed-res{font-size:11px;color:rgba(255,255,255,.4);font-family:var(--font-mono)}
+.feed-phase{font-size:11px;color:rgba(255,255,255,.55);text-transform:uppercase;letter-spacing:.06em;font-weight:500}
+
+/* RIGHT PANEL */
+.right{background:var(--paper);border-left:1px solid var(--hairline);padding:20px 16px;overflow-y:auto;display:flex;flex-direction:column;gap:18px}
+.r-title{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.08em;color:var(--slate-soft)}
+
+.stat-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.stat-card{background:var(--mist);border:1px solid var(--hairline);border-radius:var(--r-md);padding:11px 12px}
+.stat-ico{width:22px;height:22px;display:flex;align-items:center;justify-content:center;color:var(--slate-soft);margin-bottom:7px}
+.stat-val{font-family:var(--font-mono);font-size:21px;font-weight:600;color:var(--ink);line-height:1}
+.stat-val.red{color:var(--danger)}
+.stat-lbl{font-size:10.5px;color:var(--slate-soft);margin-top:4px;display:flex;align-items:center;gap:4px}
+.stat-tag{font-weight:700}
+.tag-good{color:var(--ok)} .tag-ok{color:var(--amber)} .tag-low{color:var(--danger)}
+
+.session-row{display:none;align-items:center;justify-content:space-between;padding:9px 12px;background:var(--mist);border:1px solid var(--hairline);border-radius:var(--r-md);font-size:11px;color:var(--slate)}
+.session-row.show{display:flex}
+.session-time{font-family:var(--font-mono);font-weight:600;color:var(--ink);font-size:12.5px}
+
+.status-box{border-radius:var(--r-md);padding:12px 13px;border:1.5px solid}
+.status-box.ok{background:var(--ok-soft);border-color:var(--ok-border)}
+.status-box.alert{background:var(--danger-soft);border-color:var(--danger-border);display:none}
+.status-box.alert.show{display:block}
+.status-title{font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px;margin-bottom:4px}
+.status-title.ok-t{color:#15803d}
+.status-title.alert-t{color:#b91c1c}
+.sdot{width:7px;height:7px;border-radius:50%;background:currentColor;flex-shrink:0}
+.status-box.alert .sdot{animation:blink .8s infinite}
+.status-text{font-size:12px;color:var(--slate);line-height:1.5}
+
+.log-box{flex:1;min-height:100px;background:var(--mist);border:1px solid var(--hairline);border-radius:var(--r-md);padding:8px;overflow-y:auto;font-family:var(--font-mono);font-size:10.5px}
+.log-row{display:flex;gap:7px;padding:5px 6px;border-left:2px solid var(--hairline-strong);margin-bottom:2px;border-radius:0 6px 6px 0}
+.log-row.lg-alert{border-left-color:var(--danger);background:var(--danger-soft)}
+.log-row.lg-info{border-left-color:var(--ok)}
+.log-t{color:var(--slate-soft);flex-shrink:0}
+.log-m{color:var(--slate);line-height:1.5}
+.log-m.lg-alert{color:#b91c1c;font-weight:700}
+.log-m.lg-info{color:#15803d}
+
+/* TOAST */
+.toast{position:fixed;bottom:22px;left:50%;transform:translateX(-50%) translateY(10px);background:var(--ink);color:#fff;padding:10px 20px;border-radius:10px;font-size:13px;font-weight:500;opacity:0;pointer-events:none;transition:all .25s;z-index:999;white-space:nowrap}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+@media (max-width:980px){
+  .layout{grid-template-columns:1fr;height:auto}
+  .sidebar,.right{border:none;border-bottom:1px solid var(--hairline)}
+  .feed-area{min-height:55vh}
+}
+@media (prefers-reduced-motion: reduce){
+  .scan-line{display:none}
+  .badge.live .badge-dot,.alert-ring.on,.status-box.alert .sdot{animation:none}
+}
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav class="nav">
+  <div class="nav-logo">
+    <div class="logo-box">CD</div>
+    <div>
+      <div class="nav-name">Detection System</div>
+      <div class="nav-sub">Real-Time Computer Vision Monitoring</div>
+    </div>
+  </div>
+  <div class="nav-right">
+    <div class="clock" id="clock">00:00:00</div>
+    <div class="badge" id="badge"><div class="badge-dot"></div><span id="badge-t">OFFLINE</span></div>
+  </div>
+</nav>
+
+<!-- LAYOUT -->
+<div class="layout">
+
+  <!-- LEFT -->
+  <aside class="sidebar">
+
+    <div>
+      <div class="sec-title">Detection Phase</div>
+      <div class="dropdown" id="phase-dropdown">
+        <button class="dropdown-trigger" id="phase-trigger" onclick="toggleDropdown('phase')" aria-haspopup="listbox" aria-expanded="false" aria-controls="phase-panel">
+          <span class="dd-icon-box" id="phase-trigger-icon"></span>
+          <span class="dd-trigger-text">
+            <span class="dd-trigger-label" id="phase-trigger-label"></span>
+            <span class="dd-trigger-sub" id="phase-trigger-sub"></span>
+          </span>
+          <span class="dd-chevron"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 8 12 15 19 8"/></svg></span>
+        </button>
+        <div class="dropdown-panel" id="phase-panel" role="listbox"></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="sec-title">Camera Source</div>
+      <div class="dropdown" id="camera-dropdown">
+        <button class="dropdown-trigger" id="camera-trigger" onclick="toggleDropdown('camera')" aria-haspopup="listbox" aria-expanded="false" aria-controls="camera-panel">
+          <span class="dd-icon-box tone-violet" id="camera-trigger-icon"></span>
+          <span class="dd-trigger-text">
+            <span class="dd-trigger-label" id="camera-trigger-label"></span>
+            <span class="dd-trigger-sub" id="camera-trigger-sub"></span>
+          </span>
+          <span class="dd-chevron"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="5 8 12 15 19 8"/></svg></span>
+        </button>
+        <div class="dropdown-panel" id="camera-panel" role="listbox"></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="sec-title">Controls</div>
+      <button class="btn btn-start" id="btn-start" onclick="doStart()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4l13 8-13 8z"/></svg>
+        Start Detection
+      </button>
+      <button class="btn btn-shot" id="btn-shot" onclick="doShot()" disabled>
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="7" width="17" height="12" rx="2"/><path d="M8 7l1.4-2.2h5.2L16 7"/><circle cx="12" cy="13" r="3.4"/></svg>
+        Save Screenshot
+      </button>
+      <button class="btn btn-stop" id="btn-stop" onclick="doStop()" disabled>
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>
+        Stop
+      </button>
+    </div>
+
+  </aside>
+
+  <!-- FEED -->
+  <div class="feed-area" id="feed-area">
+    <div class="feed-placeholder" id="placeholder">
+      <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="7" width="17" height="12" rx="2"/><path d="M8 7l1.4-2.2h5.2L16 7"/><circle cx="12" cy="13" r="3.4"/><line x1="2.5" y1="2.5" x2="21.5" y2="21.5" stroke="rgba(255,255,255,.4)"/></svg>
+      <div class="tip">Camera not started</div>
+      <div class="tip2">Choose a phase and camera, then press Start</div>
+    </div>
+    <video id="camera-video" autoplay playsinline muted style="display:none"></video>
+    <canvas id="camera-canvas" width="640" height="480" style="display:none"></canvas>
+    <img id="feed" src="" alt="Live feed">
+    <div class="corner tl"></div>
+    <div class="corner tr"></div>
+    <div class="corner bl"></div>
+    <div class="corner br"></div>
+    <div class="scan-line" id="scan-line"></div>
+    <div class="alert-ring" id="ring"></div>
+    <div class="feed-bar" id="feed-bar">
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:11px;color:rgba(255,255,255,.4);text-transform:uppercase;letter-spacing:.04em">Live</span>
+        <span class="feed-fps fps-ok" id="feed-fps">0.0 fps</span>
+        <span class="feed-res">640×480</span>
+      </div>
+      <span class="feed-phase" id="feed-phase">Phase 1</span>
+    </div>
+  </div>
+
+  <!-- RIGHT -->
+  <aside class="right">
+
+    <div class="r-title">Live Stats</div>
+    <div class="stat-grid">
+      <div class="stat-card">
+        <div class="stat-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M13 3 5 13h5l-1 8 9-11h-5z"/></svg></div>
+        <div class="stat-val" id="s-fps">0.0</div>
+        <div class="stat-lbl">FPS <span class="stat-tag" id="s-fps-tag"></span></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="3.4"/><path d="M5.5 20c0-3.8 3-6.4 6.5-6.4s6.5 2.6 6.5 6.4"/></svg></div>
+        <div class="stat-val" id="s-per">0</div>
+        <div class="stat-lbl">Persons</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 19 7 19 17 12 21 5 17 5 7 Z"/><line x1="12" y1="11" x2="12" y2="21"/><line x1="5" y1="7" x2="12" y2="11"/><line x1="19" y1="7" x2="12" y2="11"/></svg></div>
+        <div class="stat-val" id="s-obj">0</div>
+        <div class="stat-lbl">Objects</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-ico"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M6 16v-5a6 6 0 0112 0v5"/><path d="M4.5 16h15"/><path d="M10 19a2 2 0 004 0"/></svg></div>
+        <div class="stat-val red" id="s-alr">0</div>
+        <div class="stat-lbl">Alerts</div>
+      </div>
+    </div>
+
+    <div class="session-row" id="session-row">
+      <span>Session</span>
+      <span class="session-time" id="session-time">00:00</span>
+    </div>
+
+    <div class="r-title">System Status</div>
+    <div class="status-box ok">
+      <div class="status-title ok-t"><div class="sdot"></div>All Clear</div>
+      <div class="status-text">No crowd detected. System monitoring.</div>
+    </div>
+    <div class="status-box alert" id="alert-box">
+      <div class="status-title alert-t"><div class="sdot"></div>Crowd Alert Active</div>
+      <div class="status-text" id="alert-txt">Threshold exceeded</div>
+    </div>
+
+    <div class="r-title">Event Log</div>
+    <div class="log-box" id="log"></div>
+
+  </aside>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+  // ── Icon set (shared by dropdown triggers + option panels) ────────────────
+  const ICONS = {
+    search : '<circle cx="10" cy="10" r="6"/><line x1="20" y1="20" x2="14.5" y2="14.5"/>',
+    person : '<circle cx="12" cy="8" r="3.4"/><path d="M5.5 20c0-3.8 3-6.4 6.5-6.4s6.5 2.6 6.5 6.4"/>',
+    siren  : '<path d="M12 4 21 19 3 19 Z" stroke-linejoin="round"/><line x1="12" y1="9.5" x2="12" y2="13.5"/><circle cx="12" cy="16.3" r="0.9" fill="currentColor" stroke="none"/>',
+    laptop : '<rect x="4" y="5" width="16" height="10" rx="1.4"/><line x1="2.5" y1="18.2" x2="21.5" y2="18.2"/>',
+    camera : '<rect x="3.5" y="7" width="17" height="12" rx="2"/><path d="M8 7l1.4-2.2h5.2L16 7"/><circle cx="12" cy="13" r="3.4"/>',
+    check  : '<polyline points="4 11 9 16 18 6"/>',
+  };
+  function svg(name, size){
+    return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]}</svg>`;
+  }
+
+  const TONE_HEX = { blue:'#3a4bff', green:'#1f9d55', red:'#e0312b' };
+
+  const PHASES = [
+    {id:1, tone:'blue',  icon:'search', name:'Object Detection', desc:'All 80 COCO classes, labeled live'},
+    {id:2, tone:'green', icon:'person', name:'Person Detection', desc:'People only, with a running count'},
+    {id:3, tone:'red',   icon:'siren',  name:'Crowd Alert',      desc:'Beeps and flags when over 2 people'},
+  ];
+  const CAMERAS = [
+    {id:0, icon:'laptop', name:'Built-in Webcam', desc:'Laptop camera · index 0'},
+    {id:1, icon:'camera', name:'USB Camera',      desc:'External webcam · index 1'},
+  ];
+
+  let running=false, phase=1, cam=0, poll=null, prevAlerts=0, sessionTimer=null, sessionStart=null;
+  let cameraStream=null, captureTimer=null, capturePending=false, responseCount=0, fpsStart=0;
+
+  // ── Build dropdown option panels (once) ────────────────────────────────────
+  function buildPanel(containerId, items, selectFn, toned){
+    const el=document.getElementById(containerId);
+    el.innerHTML = items.map(it=>`
+      <button class="dd-option" data-id="${it.id}" role="option" aria-selected="false" onclick="${selectFn}(${it.id})">
+        <span class="dd-icon-box ${toned ? 'tone-'+it.tone : 'tone-violet'}">${svg(it.icon,16)}</span>
+        <span class="dd-opt-text"><span class="dd-opt-n">${it.name}</span><span class="dd-opt-d">${it.desc}</span></span>
+        <span class="dd-check">${svg('check',13)}</span>
+      </button>`).join('');
+  }
+  buildPanel('phase-panel', PHASES, 'selPhase', true);
+  buildPanel('camera-panel', CAMERAS, 'selCam', false);
+
+  // ── Dropdown open/close ─────────────────────────────────────────────────────
+  function toggleDropdown(name){
+    const dd = document.getElementById(name+'-dropdown');
+    const willOpen = !dd.classList.contains('open');
+    document.querySelectorAll('.dropdown.open').forEach(d=>{
+      d.classList.remove('open');
+      d.querySelector('.dropdown-trigger').setAttribute('aria-expanded','false');
+    });
+    if(willOpen){
+      dd.classList.add('open');
+      dd.querySelector('.dropdown-trigger').setAttribute('aria-expanded','true');
+    }
+  }
+  document.addEventListener('click', e=>{
+    if(!e.target.closest('.dropdown')){
+      document.querySelectorAll('.dropdown.open').forEach(d=>{
+        d.classList.remove('open');
+        d.querySelector('.dropdown-trigger').setAttribute('aria-expanded','false');
+      });
+    }
+  });
+  document.addEventListener('keydown', e=>{
+    if(e.key==='Escape'){
+      document.querySelectorAll('.dropdown.open').forEach(d=>{
+        d.classList.remove('open');
+        d.querySelector('.dropdown-trigger').setAttribute('aria-expanded','false');
+      });
+    }
+  });
+
+  // Clock
+  setInterval(()=>{document.getElementById('clock').textContent=new Date().toTimeString().slice(0,8)},1000);
+
+  // Log
+  function addLog(msg,type=''){
+    const b=document.getElementById('log');
+    const r=document.createElement('div'); r.className='log-row'+(type?' '+type:'');
+    const t=new Date().toTimeString().slice(0,5);
+    r.innerHTML=`<span class="log-t">${t}</span><span class="log-m ${type}">${msg}</span>`;
+    b.appendChild(r); b.scrollTop=b.scrollHeight;
+    if(b.children.length>80) b.removeChild(b.firstChild);
+  }
+
+  // Toast
+  function showToast(m){
+    const t=document.getElementById('toast'); t.textContent=m;
+    t.classList.add('show'); setTimeout(()=>t.classList.remove('show'),2500);
+  }
+
+  // ── Phase selection ──────────────────────────────────────────────────────────
+  function selPhase(p){
+    phase=p;
+    const item = PHASES.find(x=>x.id===p);
+    document.getElementById('phase-trigger-icon').className = 'dd-icon-box tone-'+item.tone;
+    document.getElementById('phase-trigger-icon').innerHTML = svg(item.icon,18);
+    document.getElementById('phase-trigger-label').textContent = item.name;
+    document.getElementById('phase-trigger-sub').textContent = item.desc;
+    document.querySelectorAll('#phase-panel .dd-option').forEach(o=>{
+      const active = Number(o.dataset.id)===p;
+      o.classList.toggle('active', active);
+      o.setAttribute('aria-selected', active);
+    });
+    document.documentElement.style.setProperty('--scan-color', TONE_HEX[item.tone]);
+    document.getElementById('feed-phase').textContent = item.name;
+    toggleDropdown('phase');
+    if(running){
+      fetch('/phase',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({phase:p})});
+      addLog('Switched to '+item.name,'lg-info');
+    }
+  }
+
+  // ── Camera selection ─────────────────────────────────────────────────────────
+  function selCam(i){
+    cam=i;
+    const item = CAMERAS.find(x=>x.id===i);
+    document.getElementById('camera-trigger-icon').innerHTML = svg(item.icon,18);
+    document.getElementById('camera-trigger-label').textContent = item.name;
+    document.getElementById('camera-trigger-sub').textContent = item.desc;
+    document.querySelectorAll('#camera-panel .dd-option').forEach(o=>{
+      const active = Number(o.dataset.id)===i;
+      o.classList.toggle('active', active);
+      o.setAttribute('aria-selected', active);
+    });
+    toggleDropdown('camera');
+    if(running){
+      fetch('/camera',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({camera:i})});
+      addLog('Camera → '+item.name,'lg-info');
+    }
+  }
+
+  // ── Session uptime ───────────────────────────────────────────────────────────
+  function startSession(){
+    sessionStart = Date.now();
+    document.getElementById('session-row').classList.add('show');
+    sessionTimer = setInterval(()=>{
+      const s = Math.floor((Date.now()-sessionStart)/1000);
+      const mm = String(Math.floor(s/60)).padStart(2,'0');
+      const ss = String(s%60).padStart(2,'0');
+      document.getElementById('session-time').textContent = mm+':'+ss;
+    },1000);
+  }
+  function stopSession(){
+    if(sessionTimer){clearInterval(sessionTimer); sessionTimer=null;}
+    document.getElementById('session-row').classList.remove('show');
+    document.getElementById('session-time').textContent='00:00';
+  }
+
+  // ── Start / Stop / Screenshot ────────────────────────────────────────────────
+  async function doStart(){
+    try{
+      if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+        showToast('Camera is not supported by this browser');
+        return;
+      }
+
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const cameras = devices.filter(d=>d.kind==='videoinput');
+      const selected = cameras[Math.min(cam, cameras.length-1)];
+      const constraints = selected
+        ? {video:{deviceId:{exact:selected.deviceId},width:{ideal:640},height:{ideal:480}},audio:false}
+        : {video:{width:{ideal:640},height:{ideal:480}},audio:false};
+
+      cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
+      const video = document.getElementById('camera-video');
+      video.srcObject = cameraStream;
+      await video.play();
+
+      await fetch('/start',{method:'POST',headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({camera:cam,phase:phase})
+      }).then(r=>r.json());
+
+      running=true; prevAlerts=0;
+      const f=document.getElementById('feed');
+      f.style.display='block';
+      document.getElementById('placeholder').style.display='none';
+      document.getElementById('feed-bar').classList.add('show');
+      document.getElementById('scan-line').classList.add('on');
+      document.getElementById('badge').className='badge live';
+      document.getElementById('badge-t').textContent='LIVE';
+      document.getElementById('btn-start').disabled=true;
+      document.getElementById('btn-stop').disabled=false;
+      document.getElementById('btn-shot').disabled=false;
+      const camName = CAMERAS.find(c=>c.id===cam).name;
+      const phaseName = PHASES.find(p=>p.id===phase).name;
+      addLog('Started · '+phaseName+' · '+camName,'lg-info');
+      startSession();
+      if(poll) clearInterval(poll);
+      poll=setInterval(doPoll,700);
+      responseCount=0;
+      fpsStart=performance.now();
+      captureTimer=setInterval(captureAndDetect,300);
+    }catch(error){
+      showToast(error.name==='NotAllowedError'
+        ? 'Allow camera permission and try again'
+        : 'Could not start the camera');
+      addLog('Camera error: '+error.message,'lg-alert');
+    }
+  }
+
+  async function captureAndDetect(){
+    if(!running || capturePending) return;
+    capturePending=true;
+    const video=document.getElementById('camera-video');
+    const canvas=document.getElementById('camera-canvas');
+    const ctx=canvas.getContext('2d');
+    ctx.drawImage(video,0,0,canvas.width,canvas.height);
+    try{
+      const response=await fetch('/detect',{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({image:canvas.toDataURL('image/jpeg',0.82)})
+      });
+      const d=await response.json();
+      if(d.ok){
+        document.getElementById('feed').src=d.image;
+        responseCount++;
+        const elapsed=(performance.now()-fpsStart)/1000;
+        if(elapsed>=1){
+          const fps=elapsed>0 ? (responseCount/elapsed).toFixed(1) : '0.0';
+          document.getElementById('s-fps').textContent=fps;
+          const q=fpsClass(Number(fps));
+          const ff=document.getElementById('feed-fps');
+          ff.textContent=fps+' fps';
+          ff.className='feed-fps '+q.cls;
+          responseCount=0;
+          fpsStart=performance.now();
+        }
+      }
+    }catch(error){
+      // Keep the last successful frame visible.
+    }finally{
+      capturePending=false;
+    }
+  }
+
+  function doStop(){
+    if(captureTimer){clearInterval(captureTimer);captureTimer=null;}
+    if(cameraStream){
+      cameraStream.getTracks().forEach(track=>track.stop());
+      cameraStream=null;
+    }
+    document.getElementById('camera-video').srcObject=null;
+    fetch('/stop',{method:'POST'}).then(()=>{
+      running=false;
+      if(poll){clearInterval(poll);poll=null;}
+      const f=document.getElementById('feed');
+      f.style.display='none'; f.src='';
+      document.getElementById('placeholder').style.display='flex';
+      document.getElementById('feed-bar').classList.remove('show');
+      document.getElementById('scan-line').classList.remove('on');
+      document.getElementById('badge').className='badge';
+      document.getElementById('badge-t').textContent='OFFLINE';
+      document.getElementById('ring').classList.remove('on');
+      document.getElementById('alert-box').classList.remove('show');
+      document.getElementById('btn-start').disabled=false;
+      document.getElementById('btn-stop').disabled=true;
+      document.getElementById('btn-shot').disabled=true;
+      stopSession();
+      addLog('Detection stopped');
+    });
+  }
+
+  function doShot(){
+    fetch('/screenshot',{method:'POST'}).then(r=>r.json()).then(d=>{
+      if(d.ok){showToast('Saved: '+d.file); addLog('Screenshot → '+d.file,'lg-info');}
+      else showToast('Start detection first');
+    });
+  }
+
+  // ── FPS quality tagging ──────────────────────────────────────────────────────
+  function fpsClass(v){
+    if(v>=20) return {cls:'fps-good', tag:'Good', tone:'tag-good'};
+    if(v>=10) return {cls:'fps-ok',   tag:'Fair', tone:'tag-ok'};
+    return        {cls:'fps-low',  tag:'Low',  tone:'tag-low'};
+  }
+
+  // ── Poll status ──────────────────────────────────────────────────────────────
+  function doPoll(){
+    fetch('/status').then(r=>r.json()).then(d=>{
+      document.getElementById('s-fps').textContent=d.fps;
+      document.getElementById('s-per').textContent=d.persons;
+      document.getElementById('s-obj').textContent=d.objects;
+      document.getElementById('s-alr').textContent=d.total_alerts;
+
+      const q = fpsClass(d.fps);
+      const ff = document.getElementById('feed-fps');
+      ff.textContent = d.fps+' fps';
+      ff.className = 'feed-fps '+q.cls;
+      const tag = document.getElementById('s-fps-tag');
+      tag.textContent = '· '+q.tag;
+      tag.className = 'stat-tag '+q.tone;
+
+      // Alert state
+      const ring=document.getElementById('ring');
+      const abox=document.getElementById('alert-box');
+      if(d.alert){
+        ring.classList.add('on'); abox.classList.add('show');
+        document.getElementById('alert-txt').textContent=d.persons+' persons — threshold of 2 exceeded';
+        document.getElementById('s-per').className='stat-val red';
+      } else {
+        ring.classList.remove('on'); abox.classList.remove('show');
+        document.getElementById('s-per').className='stat-val';
+      }
+
+      // New alert log
+      if(d.total_alerts>prevAlerts){
+        prevAlerts=d.total_alerts;
+        addLog('ALERT #'+d.total_alerts+' — '+d.persons+' persons at '+d.last_alert,'lg-alert');
+        showToast('Crowd alert — '+d.persons+' persons detected');
+      }
+    }).catch(()=>{});
+  }
+
+  // Init
+  selPhase(1);
+  selCam(0);
+  addLog('System ready');
+</script>
+</body>
+</html>
